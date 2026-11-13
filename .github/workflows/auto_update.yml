@@ -1,0 +1,35 @@
+name: TFF Fantezi & Saha İçi Veri Otomasyonu
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repoyu Çek
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Gerekli Kütüphaneleri Yükle
+        run: pip install curl_cffi rapidfuzz
+
+      - name: Saha İçi ve Fantezi Verilerini Çek ve Birleştir
+        run: python updater.py
+
+      - name: Güncel live_data.json Dosyasını Repoya Kaydet
+        run: |
+          git config --global user.name "TFF Scout Bot"
+          git config --global user.email "bot@noreply.github.com"
+          git add live_data.json
+          git diff --staged --quiet || git commit -m "Otomatik Veri Güncellemesi: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
