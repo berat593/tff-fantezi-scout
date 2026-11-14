@@ -15,26 +15,37 @@
     }
     .badge-oop { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
     .badge-dgw { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .editable-input {
+      background: #1f2937; border: 1px solid #374151; color: #fff;
+      border-radius: 0.375rem; padding: 2px 6px; width: 64px; font-size: 11px;
+    }
   </style>
 </head>
 <body class="min-h-screen p-4 md:p-6">
 
-  <!-- Üst Başlık & Veri Yükleme Paneli -->
-  <header class="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-800 pb-4">
+  <!-- Üst Başlık & Çift Kaynak Veri Yükleme Paneli -->
+  <header class="max-w-7xl mx-auto mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-gray-800 pb-4">
     <div>
       <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
         ⚽ TFF Fantezi Lig <span class="text-emerald-400">Pro Scout & xP Motoru</span>
       </h1>
       <p class="text-sm text-gray-400 mt-1">
-        Alt-Metrik, Fikstür Matrisi, Poisson Gol Yememe ve 100M TL MILP Kadro Çözücü
+        Sofascore Alt-Metrikleri + Resmi Fantezi Lig Fiyat/Seçilme Eşleştirici & Kaptan Analizi
       </p>
     </div>
-    <div class="flex items-center gap-3">
-      <span id="data-status" class="text-xs text-emerald-400 font-semibold"></span>
-      <label class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition flex items-center gap-2">
-        📁 Canlı Veri Yükle (.json)
-        <input type="file" id="json-file-input" accept=".json" onchange="handleFileUpload(event)" class="hidden" />
+    <div class="flex flex-wrap items-center gap-2">
+      <span id="data-status" class="text-xs text-emerald-400 font-semibold mr-2"></span>
+      <label class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition flex items-center gap-1.5">
+        📊 1. Sofascore Verisi (.json)
+        <input type="file" accept=".json" onchange="handleSofaUpload(event)" class="hidden" />
       </label>
+      <label class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer transition flex items-center gap-1.5">
+        🏷️ 2. Fantezi Lig Resmi Veri Eşleştir (.json)
+        <input type="file" accept=".json" onchange="handleFantasyMerge(event)" class="hidden" />
+      </label>
+      <button onclick="clearSavedData()" class="px-2.5 py-2 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-200 text-xs font-semibold">
+        🗑️ Sıfırla
+      </button>
     </div>
   </header>
 
@@ -61,10 +72,11 @@
       </label>
       <input id="sl-own" type="range" min="3" max="30" step="1" value="12" oninput="recalculateAll()" class="w-full accent-emerald-500 mt-1" />
     </div>
-    <div class="flex gap-2 justify-end">
-      <button onclick="switchTab('radar')" id="tab-radar" class="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white">🎯 Niş Radar</button>
-      <button onclick="switchTab('table')" id="tab-table" class="px-3 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300">📊 Tüm Havuz</button>
-      <button onclick="switchTab('solver')" id="tab-solver" class="px-3 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300">⚽ 100M Kadro Çözücü</button>
+    <div class="flex flex-wrap gap-1 justify-end">
+      <button onclick="switchTab('radar')" id="tab-radar" class="px-2.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white">🎯 Niş</button>
+      <button onclick="switchTab('table')" id="tab-table" class="px-2.5 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300">📊 Havuz</button>
+      <button onclick="switchTab('captain')" id="tab-captain" class="px-2.5 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300">⭐ Kaptan</button>
+      <button onclick="switchTab('solver')" id="tab-solver" class="px-2.5 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300">⚽ Çözücü</button>
     </div>
   </section>
 
@@ -78,19 +90,22 @@
     <div id="radar-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
   </main>
 
-  <!-- SEKME 2: TÜM OYUNCULAR TABLOSU -->
+  <!-- SEKME 2: TÜM OYUNCULAR TABLOSU (DOĞRUDAN DÜZENLENEBİLİR) -->
   <section id="view-table" class="max-w-7xl mx-auto hidden">
+    <div class="mb-2 text-xs text-gray-400">
+      💡 <b>İpucu:</b> Resmi Fantezi Lig verisini üstteki mavi butondan eşleştirebilir veya tablodaki <b>Mevki, Fiyat, Seçilme ve Çift Maç (DGW)</b> alanlarını doğrudan değiştirerek kalıcı olarak kaydedebilirsiniz.
+    </div>
     <div class="card overflow-x-auto">
       <table class="w-full text-left text-xs">
         <thead class="bg-gray-900/80 text-gray-400 uppercase border-b border-gray-800">
           <tr>
             <th class="p-3">Oyuncu</th>
             <th class="p-3">Takım</th>
-            <th class="p-3">Mevki</th>
-            <th class="p-3">Fiyat</th>
-            <th class="p-3">Seçilme</th>
+            <th class="p-3">Resmi Mevki</th>
+            <th class="p-3">Resmi Fiyat (M)</th>
+            <th class="p-3">Seçilme (%)</th>
             <th class="p-3">xG+xA / 90</th>
-            <th class="p-3">Fikstür / DGW</th>
+            <th class="p-3">DGW (Çift Maç)</th>
             <th class="p-3 text-emerald-400">Beklenen Puan (xP)</th>
             <th class="p-3">Kilit</th>
           </tr>
@@ -100,7 +115,16 @@
     </div>
   </section>
 
-  <!-- SEKME 3: 100M TL KADRO ÇÖZÜCÜ -->
+  <!-- SEKME 3: KAPTAN KARŞILAŞTIRMA MODÜLÜ -->
+  <section id="view-captain" class="max-w-7xl mx-auto hidden space-y-4">
+    <div class="card p-4">
+      <h2 class="text-base font-bold text-white mb-1">⭐ Kaptanlık Risk vs. Ödül (Ceiling) Analizi</h2>
+      <p class="text-xs text-gray-400 mb-4">Havuzdaki en yüksek xP puanına sahip ilk 5 aday arasından tavan puan potansiyeli en yüksek kaptanı seç.</p>
+      <div id="captain-grid" class="grid grid-cols-1 md:grid-cols-5 gap-4"></div>
+    </div>
+  </section>
+
+  <!-- SEKME 4: 100M TL KADRO ÇÖZÜCÜ -->
   <section id="view-solver" class="max-w-7xl mx-auto hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="card p-4 space-y-4">
       <h2 class="text-lg font-bold text-white">⚙️ Optimizasyon Kısıtları</h2>
@@ -132,13 +156,29 @@
     let bannedIds = new Set();
     let playersData = [];
 
-    // Sayfa açıldığında tarayıcı hafızasında (localStorage) kayıtlı veri var mı kontrol et
+    function normalizeName(str) {
+      return (str || "")
+        .toString()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ı/g, "i")
+        .replace(/[^a-z0-9]/g, "");
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('tff_scout_data', JSON.stringify(playersData));
+      const matchedCount = playersData.filter(p => p.isOfficialFantasy).length;
+      document.getElementById('data-status').innerText =
+        `💾 ${playersData.length} Oyuncu (${matchedCount} Resmi Fantezi Eşleşmeli)`;
+    }
+
     function loadSavedData() {
       const saved = localStorage.getItem('tff_scout_data');
       if (saved) {
         try {
           playersData = JSON.parse(saved);
-          document.getElementById('data-status').innerText = `💾 Hafızadan Yüklendi (${playersData.length} Oyuncu)`;
+          saveToStorage();
           recalculateAll();
         } catch(e) {
           localStorage.removeItem('tff_scout_data');
@@ -146,33 +186,124 @@
       }
     }
 
-    function handleFileUpload(event) {
+    function clearSavedData() {
+      if (!confirm("Hafızadaki tüm oyuncu verilerini sıfırlamak istediğinize emin misiniz?")) return;
+      localStorage.removeItem('tff_scout_data');
+      playersData = [];
+      document.getElementById('data-status').innerText = "Hafıza sıfırlandı.";
+      document.getElementById('radar-grid').innerHTML = "";
+      document.getElementById('table-body').innerHTML = "";
+      document.getElementById('captain-grid').innerHTML = "";
+      document.getElementById('pitch-container').innerHTML = "";
+    }
+
+    // 1. Sofascore Alt-Metrik Dosyasını Yükle
+    function handleSofaUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
           const json = JSON.parse(e.target.result);
-          playersData = Array.isArray(json) ? json : (json.players || []);
-          playersData = playersData.map((p, idx) => ({
+          const raw = Array.isArray(json) ? json : (json.players || []);
+          playersData = raw.map((p, idx) => ({
             ...p,
             id: p.id || idx + 1,
-            isDGW: p.isDGW || false,
+            price: p.price ?? 0,
+            ownership: p.ownership ?? 0,
+            isOfficialFantasy: Boolean(p.isOfficialFantasy),
+            isDGW: Boolean(p.isDGW),
             fixtureDesc: p.fixtureDesc || "Normal Hafta",
             matchupMult: p.matchupMult || 1.15
           }));
-          
-          // Veriyi tarayıcının kalıcı hafızasına kaydet
-          localStorage.setItem('tff_scout_data', JSON.stringify(playersData));
-          document.getElementById('data-status').innerText = `✅ Güncel Veri Aktif (${playersData.length} Oyuncu)`;
-          
-          alert(`✅ Başarılı! ${playersData.length} oyuncu hafızaya kaydedildi.`);
+          saveToStorage();
           recalculateAll();
+          alert(`✅ ${playersData.length} oyuncunun Sofascore alt-metrik verisi yüklendi.`);
         } catch (err) {
-          alert("❌ Hata: Geçerli bir JSON dosyası yüklemediniz.");
+          alert("❌ Geçerli bir JSON dosyası seçmediniz.");
         }
       };
       reader.readAsText(file);
+    }
+
+    // 2. Resmi Fantezi Lig Verisini (Fiyat, Mevki, Seçilme) İsimden Eşleştirerek Birleştir
+    function handleFantasyMerge(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const json = JSON.parse(e.target.result);
+          const list = Array.isArray(json) ? json : (json.players || json.data || json.elements || json.items || []);
+          if (!Array.isArray(list) || list.length === 0) {
+            alert("❌ Dosyada oyuncu dizisi bulunamadı.");
+            return;
+          }
+
+          const posConvert = {
+            "1": "GK", "2": "DEF", "3": "MID", "4": "FWD",
+            "GK": "GK", "KL": "GK", "KALECI": "GK",
+            "DEF": "DEF", "DF": "DEF", "DEFANS": "DEF",
+            "MID": "MID", "OS": "MID", "ORTASAHA": "MID",
+            "FWD": "FWD", "FV": "FWD", "FORVET": "FWD"
+          };
+
+          let matched = 0;
+          list.forEach(fp => {
+            const rawName = fp.name || fp.full_name || fp.web_name || `${fp.first_name || ''} ${fp.second_name || ''}`.trim();
+            const normTarget = normalizeName(rawName);
+            if (!normTarget) return;
+
+            const found = playersData.find(sp => {
+              const n = normalizeName(sp.name);
+              return n === normTarget || n.includes(normTarget) || normTarget.includes(n);
+            });
+
+            if (found) {
+              const rawPrice = fp.price ?? fp.now_cost ?? fp.value ?? fp.cost;
+              const rawOwn = fp.ownership ?? fp.selected_by_percent ?? fp.selection_rate ?? fp.picked;
+              const rawPos = (fp.pos || fp.position || fp.element_type || "").toString().toUpperCase();
+
+              if (rawPrice !== undefined) {
+                const numP = parseFloat(rawPrice);
+                found.price = numP > 40 ? +(numP / 10).toFixed(1) : +numP.toFixed(1);
+              }
+              if (rawOwn !== undefined) {
+                found.ownership = +parseFloat(rawOwn).toFixed(1);
+              }
+              if (posConvert[rawPos]) {
+                found.pos = posConvert[rawPos];
+              }
+              found.isOfficialFantasy = true;
+              matched++;
+            }
+          });
+
+          saveToStorage();
+          recalculateAll();
+          alert(`🎉 Resmi Fantezi Lig verisinden ${matched} oyuncunun Fiyat, Mevki ve Seçilme oranı güncellendi!`);
+        } catch (err) {
+          alert("❌ Fantezi Lig JSON dosyası okunamadı.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Tablodan Manuel Güncelleme
+    function updatePlayerField(id, field, value) {
+      const p = playersData.find(x => x.id === id);
+      if (!p) return;
+      if (field === 'price' || field === 'ownership') {
+        p[field] = parseFloat(value) || 0;
+        p.isOfficialFantasy = true;
+      } else if (field === 'pos') {
+        p.pos = value;
+        p.isOfficialFantasy = true;
+      } else if (field === 'isDGW') {
+        p.isDGW = Boolean(value);
+      }
+      saveToStorage();
+      recalculateAll();
     }
 
     function calcPlayerXP(p) {
@@ -180,22 +311,22 @@
       const matchupWeight = parseFloat(document.getElementById('sl-matchup').value);
       const goalPts = { GK: 10, DEF: 6, MID: 5, FWD: 4 }[p.pos] || 5;
       const csPts = { GK: 4, DEF: 4, MID: 1, FWD: 0 }[p.pos] || 0;
-      
+
       const pCS = Math.exp(-(p.oppLambda || 1.25));
       let fixMultiplier = (p.matchupMult || 1.15) * (matchupWeight / 1.2);
       if (p.isDGW) fixMultiplier *= 1.75;
 
-      const totalXP = (p.minsProb * 2.0) + 
-                      (p.xg90 * xgWeight * goalPts * fixMultiplier) + 
-                      (p.xa90 * xgWeight * 3.0 * fixMultiplier) + 
-                      (p.minsProb * pCS * csPts) + 
+      const totalXP = (p.minsProb * 2.0) +
+                      (p.xg90 * xgWeight * goalPts * fixMultiplier) +
+                      (p.xa90 * xgWeight * 3.0 * fixMultiplier) +
+                      (p.minsProb * pCS * csPts) +
                       (p.bonusExp || 0.5);
 
-      return { 
-        ...p, 
-        pCS, 
-        totalXP: +totalXP.toFixed(2), 
-        deltaXGI: +((p.xg90 + p.xa90) - (p.actualGI90 || 0)).toFixed(2) 
+      return {
+        ...p,
+        pCS,
+        totalXP: +totalXP.toFixed(2),
+        deltaXGI: +((p.xg90 + p.xa90) - (p.actualGI90 || 0)).toFixed(2)
       };
     }
 
@@ -211,6 +342,7 @@
 
       renderRadar(computed, maxOwn);
       renderTable(computed);
+      renderCaptainModule(computed);
       solveOptimalSquad(computed);
     }
 
@@ -226,6 +358,7 @@
             <div class="flex justify-between items-start">
               <div>
                 <span class="text-xs font-bold px-2 py-0.5 rounded bg-gray-800 text-gray-300">${p.team} • ${p.pos}</span>
+                ${p.isOfficialFantasy ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 ml-1">Resmi</span>` : `<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 ml-1">Tahmini</span>`}
                 ${p.isOOP ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded badge-oop ml-1">OOP</span>` : ''}
                 ${p.isDGW ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded badge-dgw ml-1">DGW ⚡</span>` : ''}
                 <h3 class="text-base font-bold text-white mt-1">${p.name}</h3>
@@ -235,7 +368,7 @@
                 <div class="text-[11px] text-gray-400">${p.price}M TL • %${p.ownership}</div>
               </div>
             </div>
-            <p class="text-xs text-gray-400 mt-2"><b>Fikstür:</b> ${p.fixtureDesc || 'Normal'} | ${p.scoutNote || ''}</p>
+            <p class="text-xs text-gray-400 mt-2">${p.scoutNote || ''}</p>
           </div>
         </div>
       `).join('') || `<div class="col-span-3 text-center text-gray-400 py-8">Bu filtreye uygun oyuncu bulunamadı.</div>`;
@@ -245,16 +378,29 @@
       document.getElementById('table-body').innerHTML = list.map(p => `
         <tr class="hover:bg-gray-900/50">
           <td class="p-3 font-bold text-white">
-            ${p.name} 
+            ${p.name}
+            ${p.isOfficialFantasy ? '<span class="text-[10px] text-blue-400 ml-1" title="Resmi Fantezi Verisi">✓</span>' : ''}
             ${p.isOOP ? '<span class="text-[10px] px-1.5 py-0.5 rounded badge-oop ml-1">OOP</span>' : ''}
-            ${p.isDGW ? '<span class="text-[10px] px-1.5 py-0.5 rounded badge-dgw ml-1">DGW</span>' : ''}
           </td>
           <td class="p-3 text-gray-300">${p.team}</td>
-          <td class="p-3">${p.pos}</td>
-          <td class="p-3 font-semibold">${p.price}M</td>
-          <td class="p-3">%${p.ownership}</td>
+          <td class="p-3">
+            <select onchange="updatePlayerField(${p.id}, 'pos', this.value)" class="editable-input">
+              <option value="GK" ${p.pos === 'GK' ? 'selected' : ''}>GK</option>
+              <option value="DEF" ${p.pos === 'DEF' ? 'selected' : ''}>DEF</option>
+              <option value="MID" ${p.pos === 'MID' ? 'selected' : ''}>MID</option>
+              <option value="FWD" ${p.pos === 'FWD' ? 'selected' : ''}>FWD</option>
+            </select>
+          </td>
+          <td class="p-3">
+            <input type="number" step="0.5" value="${p.price}" onchange="updatePlayerField(${p.id}, 'price', this.value)" class="editable-input" />
+          </td>
+          <td class="p-3">
+            <input type="number" step="0.1" value="${p.ownership}" onchange="updatePlayerField(${p.id}, 'ownership', this.value)" class="editable-input" />
+          </td>
           <td class="p-3">${(p.xg90 + p.xa90).toFixed(2)}</td>
-          <td class="p-3 text-gray-300 text-[11px]">${p.fixtureDesc || 'Normal Hafta'}</td>
+          <td class="p-3">
+            <input type="checkbox" ${p.isDGW ? 'checked' : ''} onchange="updatePlayerField(${p.id}, 'isDGW', this.checked)" class="accent-blue-500 cursor-pointer" />
+          </td>
           <td class="p-3 font-extrabold text-emerald-400 text-sm">${p.totalXP}</td>
           <td class="p-3 flex gap-1">
             <button onclick="toggleLock(${p.id})" class="px-2 py-1 rounded text-[11px] ${lockedIds.has(p.id) ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300'}">🔒</button>
@@ -262,6 +408,30 @@
           </td>
         </tr>
       `).join('');
+    }
+
+    function renderCaptainModule(list) {
+      const topCandidates = list.slice(0, 5);
+      document.getElementById('captain-grid').innerHTML = topCandidates.map((p, idx) => {
+        const ceiling = (p.totalXP * 1.65).toFixed(1);
+        const floor = (p.totalXP * 0.75).toFixed(1);
+        return `
+          <div class="card p-3 border ${idx === 0 ? 'border-emerald-500 bg-emerald-950/20' : 'border-gray-800'} flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center text-[10px] text-gray-400">
+                <span>${idx === 0 ? '👑 #1 KAPTAN ADAYI' : `#${idx + 1} Alternatif`}</span>
+                <span>%${p.ownership}</span>
+              </div>
+              <div class="text-sm font-bold text-white mt-1">${p.name}</div>
+              <div class="text-xs text-emerald-400 font-extrabold mt-0.5">${p.totalXP} xP (Baz)</div>
+            </div>
+            <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] space-y-1">
+              <div class="flex justify-between text-gray-300"><span>Tavan (Ceiling):</span><span class="text-amber-400 font-bold">${ceiling} P</span></div>
+              <div class="flex justify-between text-gray-300"><span>Taban (Floor):</span><span class="text-blue-400 font-bold">${floor} P</span></div>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function solveOptimalSquad(computedList) {
@@ -310,9 +480,9 @@
     function toggleLock(id) { lockedIds.has(id) ? lockedIds.delete(id) : (bannedIds.delete(id), lockedIds.add(id)); recalculateAll(); }
     function toggleBan(id) { bannedIds.has(id) ? bannedIds.delete(id) : (lockedIds.delete(id), bannedIds.add(id)); recalculateAll(); }
     function switchTab(tab) {
-      ['radar', 'table', 'solver'].forEach(t => {
+      ['radar', 'table', 'captain', 'solver'].forEach(t => {
         document.getElementById('view-' + t).classList.toggle('hidden', t !== tab);
-        document.getElementById('tab-' + t).className = t === tab ? 'px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white' : 'px-3 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300';
+        document.getElementById('tab-' + t).className = t === tab ? 'px-2.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white' : 'px-2.5 py-2 rounded-lg text-xs font-bold bg-gray-800 text-gray-300';
       });
     }
 
