@@ -129,10 +129,7 @@
     let radarFilter = 'ALL';
     let lockedIds = new Set();
     let bannedIds = new Set();
-    let playersData = [
-      { id: 1, name: "Gabriel Sara", team: "GS", pos: "MID", isOOP: false, price: 8.5, ownership: 9.4, minsProb: 0.95, xg90: 0.24, xa90: 0.46, actualGI90: 0.35, oppLambda: 0.85, bonusExp: 1.6, isDGW: false, fixtureDesc: "Normal Hafta", scoutNote: "Duran top tekeli." }
-    ];
-
+   let playersData = [];
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
