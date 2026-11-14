@@ -14,6 +14,7 @@
       position: relative;
     }
     .badge-oop { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-dgw { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
   </style>
 </head>
 <body class="min-h-screen p-4 md:p-6">
@@ -25,7 +26,7 @@
         ⚽ TFF Fantezi Lig <span class="text-emerald-400">Pro Scout & xP Motoru</span>
       </h1>
       <p class="text-sm text-gray-400 mt-1">
-        Alt-Metrik (xG/xA), Mevki Dışı (OOP), Poisson Gol Yememe ve 100M TL MILP Kadro Çözücü
+        Alt-Metrik, Fikstür Matrisi, Poisson Gol Yememe ve 100M TL MILP Kadro Çözücü
       </p>
     </div>
     <div class="flex items-center gap-3">
@@ -47,7 +48,7 @@
     </div>
     <div>
       <label class="text-xs text-gray-400 font-semibold flex justify-between">
-        <span>Eşleşme & Duran Top Çarpanı</span>
+        <span>Fikstür & Zafiyet Çarpanı</span>
         <span id="lbl-matchup" class="text-emerald-400 font-bold">1.20x</span>
       </label>
       <input id="sl-matchup" type="range" min="0.8" max="1.6" step="0.05" value="1.20" oninput="recalculateAll()" class="w-full accent-emerald-500 mt-1" />
@@ -88,6 +89,7 @@
             <th class="p-3">Fiyat</th>
             <th class="p-3">Seçilme</th>
             <th class="p-3">xG+xA / 90</th>
+            <th class="p-3">Fikstür / DGW</th>
             <th class="p-3 text-emerald-400">Beklenen Puan (xP)</th>
             <th class="p-3">Kilit</th>
           </tr>
@@ -127,12 +129,8 @@
     let radarFilter = 'ALL';
     let lockedIds = new Set();
     let bannedIds = new Set();
-    let playersData = [];
-
-    // Başlangıç örnek verisi (JSON yüklenene kadar boş kalmaması için)
-    playersData = [
-      { id: 1, name: "Gabriel Sara", team: "GS", pos: "MID", isOOP: false, price: 8.5, ownership: 9.4, minsProb: 0.95, xg90: 0.24, xa90: 0.46, actualGI90: 0.35, oppLambda: 0.85, bonusExp: 1.6, scoutNote: "Duran top tekeli." },
-      { id: 2, name: "Barış Alper Yılmaz", team: "GS", pos: "MID", isOOP: true, price: 9.0, ownership: 18.5, minsProb: 0.92, xg90: 0.45, xa90: 0.22, actualGI90: 0.48, oppLambda: 0.85, bonusExp: 1.4, scoutNote: "Mevki dışı (OOP) avantajı." }
+    let playersData = [
+      { id: 1, name: "Gabriel Sara", team: "GS", pos: "MID", isOOP: false, price: 8.5, ownership: 9.4, minsProb: 0.95, xg90: 0.24, xa90: 0.46, actualGI90: 0.35, oppLambda: 0.85, bonusExp: 1.6, isDGW: false, fixtureDesc: "Normal Hafta", scoutNote: "Duran top tekeli." }
     ];
 
     function handleFileUpload(event) {
@@ -142,12 +140,16 @@
       reader.onload = function(e) {
         try {
           const json = JSON.parse(e.target.result);
-          if (Array.isArray(json)) {
-            playersData = json;
-          } else if (json.players && Array.isArray(json.players)) {
-            playersData = json.players;
-          }
-          alert(`✅ Başarılı! ${playersData.length} oyuncunun verisi yüklendi.`);
+          playersData = Array.isArray(json) ? json : (json.players || []);
+          // Yeni eklenen alanlar eksikse güvenli varsayılan atayalım
+          playersData = playersData.map((p, idx) => ({
+            ...p,
+            id: p.id || idx + 1,
+            isDGW: p.isDGW || false,
+            fixtureDesc: p.fixtureDesc || "Normal Hafta",
+            matchupMult: p.matchupMult || 1.15
+          }));
+          alert(`✅ Başarılı! ${playersData.length} oyuncunun verisi ve fikstür matrisi yüklendi.`);
           recalculateAll();
         } catch (err) {
           alert("❌ Hata: Geçerli bir JSON dosyası yüklemediniz.");
@@ -161,9 +163,27 @@
       const matchupWeight = parseFloat(document.getElementById('sl-matchup').value);
       const goalPts = { GK: 10, DEF: 6, MID: 5, FWD: 4 }[p.pos] || 5;
       const csPts = { GK: 4, DEF: 4, MID: 1, FWD: 0 }[p.pos] || 0;
+      
       const pCS = Math.exp(-(p.oppLambda || 1.25));
-      const totalXP = (p.minsProb * 2.0) + (p.xg90 * xgWeight * goalPts) + (p.xa90 * xgWeight * 3.0) + (p.minsProb * pCS * csPts) + (p.bonusExp || 0.5);
-      return { ...p, pCS, totalXP: +totalXP.toFixed(2), deltaXGI: +((p.xg90 + p.xa90) - (p.actualGI90 || 0)).toFixed(2) };
+      
+      // Fikstür Çarpanı & Çift Hafta (DGW) Mantığı
+      let fixMultiplier = (p.matchupMult || 1.15) * (matchupWeight / 1.2);
+      if (p.isDGW) {
+        fixMultiplier *= 1.75; // Çift maç haftasında beklenti katsayısı katlanır
+      }
+
+      const totalXP = (p.minsProb * 2.0) + 
+                      (p.xg90 * xgWeight * goalPts * fixMultiplier) + 
+                      (p.xa90 * xgWeight * 3.0 * fixMultiplier) + 
+                      (p.minsProb * pCS * csPts) + 
+                      (p.bonusExp || 0.5);
+
+      return { 
+        ...p, 
+        pCS, 
+        totalXP: +totalXP.toFixed(2), 
+        deltaXGI: +((p.xg90 + p.xa90) - (p.actualGI90 || 0)).toFixed(2) 
+      };
     }
 
     function recalculateAll() {
@@ -192,6 +212,7 @@
               <div>
                 <span class="text-xs font-bold px-2 py-0.5 rounded bg-gray-800 text-gray-300">${p.team} • ${p.pos}</span>
                 ${p.isOOP ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded badge-oop ml-1">OOP</span>` : ''}
+                ${p.isDGW ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded badge-dgw ml-1">DGW ⚡</span>` : ''}
                 <h3 class="text-base font-bold text-white mt-1">${p.name}</h3>
               </div>
               <div class="text-right">
@@ -199,7 +220,7 @@
                 <div class="text-[11px] text-gray-400">${p.price}M TL • %${p.ownership}</div>
               </div>
             </div>
-            <p class="text-xs text-gray-400 mt-2">${p.scoutNote || ''}</p>
+            <p class="text-xs text-gray-400 mt-2"><b>Fikstür:</b> ${p.fixtureDesc || 'Normal'} | ${p.scoutNote || ''}</p>
           </div>
         </div>
       `).join('') || `<div class="col-span-3 text-center text-gray-400 py-8">Bu filtreye uygun oyuncu bulunamadı.</div>`;
@@ -208,12 +229,17 @@
     function renderTable(list) {
       document.getElementById('table-body').innerHTML = list.map(p => `
         <tr class="hover:bg-gray-900/50">
-          <td class="p-3 font-bold text-white">${p.name} ${p.isOOP ? '<span class="text-[10px] px-1.5 py-0.5 rounded badge-oop ml-1">OOP</span>' : ''}</td>
+          <td class="p-3 font-bold text-white">
+            ${p.name} 
+            ${p.isOOP ? '<span class="text-[10px] px-1.5 py-0.5 rounded badge-oop ml-1">OOP</span>' : ''}
+            ${p.isDGW ? '<span class="text-[10px] px-1.5 py-0.5 rounded badge-dgw ml-1">DGW</span>' : ''}
+          </td>
           <td class="p-3 text-gray-300">${p.team}</td>
           <td class="p-3">${p.pos}</td>
           <td class="p-3 font-semibold">${p.price}M</td>
           <td class="p-3">%${p.ownership}</td>
           <td class="p-3">${(p.xg90 + p.xa90).toFixed(2)}</td>
+          <td class="p-3 text-gray-300 text-[11px]">${p.fixtureDesc || 'Normal Hafta'}</td>
           <td class="p-3 font-extrabold text-emerald-400 text-sm">${p.totalXP}</td>
           <td class="p-3 flex gap-1">
             <button onclick="toggleLock(${p.id})" class="px-2 py-1 rounded text-[11px] ${lockedIds.has(p.id) ? 'bg-emerald-600 text-white' : 'bg-gray-800 text-gray-300'}">🔒</button>
