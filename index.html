@@ -30,6 +30,7 @@
       </p>
     </div>
     <div class="flex items-center gap-3">
+      <span id="data-status" class="text-xs text-emerald-400 font-semibold"></span>
       <label class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition flex items-center gap-2">
         📁 Canlı Veri Yükle (.json)
         <input type="file" id="json-file-input" accept=".json" onchange="handleFileUpload(event)" class="hidden" />
@@ -129,7 +130,22 @@
     let radarFilter = 'ALL';
     let lockedIds = new Set();
     let bannedIds = new Set();
-   let playersData = [];
+    let playersData = [];
+
+    // Sayfa açıldığında tarayıcı hafızasında (localStorage) kayıtlı veri var mı kontrol et
+    function loadSavedData() {
+      const saved = localStorage.getItem('tff_scout_data');
+      if (saved) {
+        try {
+          playersData = JSON.parse(saved);
+          document.getElementById('data-status').innerText = `💾 Hafızadan Yüklendi (${playersData.length} Oyuncu)`;
+          recalculateAll();
+        } catch(e) {
+          localStorage.removeItem('tff_scout_data');
+        }
+      }
+    }
+
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -138,7 +154,6 @@
         try {
           const json = JSON.parse(e.target.result);
           playersData = Array.isArray(json) ? json : (json.players || []);
-          // Yeni eklenen alanlar eksikse güvenli varsayılan atayalım
           playersData = playersData.map((p, idx) => ({
             ...p,
             id: p.id || idx + 1,
@@ -146,7 +161,12 @@
             fixtureDesc: p.fixtureDesc || "Normal Hafta",
             matchupMult: p.matchupMult || 1.15
           }));
-          alert(`✅ Başarılı! ${playersData.length} oyuncunun verisi ve fikstür matrisi yüklendi.`);
+          
+          // Veriyi tarayıcının kalıcı hafızasına kaydet
+          localStorage.setItem('tff_scout_data', JSON.stringify(playersData));
+          document.getElementById('data-status').innerText = `✅ Güncel Veri Aktif (${playersData.length} Oyuncu)`;
+          
+          alert(`✅ Başarılı! ${playersData.length} oyuncu hafızaya kaydedildi.`);
           recalculateAll();
         } catch (err) {
           alert("❌ Hata: Geçerli bir JSON dosyası yüklemediniz.");
@@ -162,12 +182,8 @@
       const csPts = { GK: 4, DEF: 4, MID: 1, FWD: 0 }[p.pos] || 0;
       
       const pCS = Math.exp(-(p.oppLambda || 1.25));
-      
-      // Fikstür Çarpanı & Çift Hafta (DGW) Mantığı
       let fixMultiplier = (p.matchupMult || 1.15) * (matchupWeight / 1.2);
-      if (p.isDGW) {
-        fixMultiplier *= 1.75; // Çift maç haftasında beklenti katsayısı katlanır
-      }
+      if (p.isDGW) fixMultiplier *= 1.75;
 
       const totalXP = (p.minsProb * 2.0) + 
                       (p.xg90 * xgWeight * goalPts * fixMultiplier) + 
@@ -187,6 +203,8 @@
       document.getElementById('lbl-xg').innerText = document.getElementById('sl-xg').value + 'x';
       document.getElementById('lbl-matchup').innerText = document.getElementById('sl-matchup').value + 'x';
       document.getElementById('lbl-own').innerText = '%' + document.getElementById('sl-own').value;
+
+      if (playersData.length === 0) return;
 
       const maxOwn = parseFloat(document.getElementById('sl-own').value);
       const computed = playersData.map(calcPlayerXP).sort((a, b) => b.totalXP - a.totalXP);
@@ -247,6 +265,7 @@
     }
 
     function solveOptimalSquad(computedList) {
+      if (playersData.length === 0) return;
       const list = computedList || playersData.map(calcPlayerXP).sort((a, b) => b.totalXP - a.totalXP);
       const formStr = document.getElementById('sel-formation').value;
       const [nDEF, nMID, nFWD] = formStr.split('-').map(Number);
@@ -297,7 +316,9 @@
       });
     }
 
-    window.addEventListener("DOMContentLoaded", () => recalculateAll());
+    window.addEventListener("DOMContentLoaded", () => {
+      loadSavedData();
+    });
   </script>
 </body>
 </html>
